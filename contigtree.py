@@ -11,22 +11,44 @@ parser.add_argument('depth', type=int, help="Search depth / tree size. A value o
 parser.add_argument('targets', type=int, nargs='+', help="Target contig IDs, separated by spaces")
 args = parser.parse_args()
 
-Segment = namedtuple("Segment", ['ID', 'flipped', 'seq'])
+Segment = namedtuple("Segment", ['ID', 'flipped', 'seq', 'name', 'length'])
 
 
-def print_segment(self):
-    return f">{self.ID}_len_{len(self.seq)}\n{self.seq}"
+#%%
+names = ["Albatross","Auklet","Bittern","Blackbird","Bluebird","Bunting","Chickadee","Cormorant","Cowbird","Crow","Dove",
+         "Dowitcher","Duck","Eagle","Egret","Falcon","Finch","Flycatcher","Gallinule","Gnatcatcher","Godwit","Goldeneye",
+         "Goldfinch","Goose","Grackle","Grebe","Grosbeak","Gull","Hawk","Heron","Hummingbird","Ibis","Jaeger","Jay","Junco",
+         "Kingbird","Kinglet","Kite","Loon","Magpie","Meadowlark","Merganser","Murrelet","Nuthatch","Oriole","Owl","Pelican",
+         "Petrel","Pewee","Phalarope","Phoebe","Pigeon","Pipit","Plover","Puffin","Quail","Rail","Raven","Redstart","Sandpiper",
+         "Sapsucker","Scaup","Scoter","Shearwater","Shrike","Skua","Sparrow","Storm-Petrel","Swallow","Swift","Tanager","Teal",
+         "Tern","Thrasher","Thrush","Titmouse","Towhee","Turnstone","Vireo","Vulture","Warbler","Wigeon","Woodpecker","Wren","Yellowlegs"]
 
 
-Segment.__str__ = print_segment
+def make_name(id):
+    return names[id % len(names)]
 
+#%%
+
+class Segment:
+    def __init__(self, ID, flipped, seq):
+        self.ID = ID
+        self.flipped = flipped
+        self.seq = seq
+        self.length = len(seq)
+        self.name = make_name(ID)
+
+    def __str__(self):
+        return f">{self.name}_{self.length}_{self.ID}\n{self.seq}"
+
+    
 
 def findleft(pos, m):
     m.seek(m.rfind(b'>', 0, pos))
     return m.tell(), m.readline()
 
 
-def linehunter(target, filename):
+def linehunter(target, filename): 
+    ''' Finds a target ID (line number) in the FASTA file'''
     f = open(filename, 'r+')
     m = mmap(f.fileno(), 0)
     foundline = -1
@@ -68,11 +90,12 @@ def reverse_complement(sequence):
 
 
 def buildtree(filename, segments, ID, maxdepth=3, flip_flag=False, depth=0):
-    print(f'\t|->{ID}{"(r)" if flip_flag else ""}'.expandtabs(depth*10), file=sys.stderr)
+    ''' Main recursive function '''
     _, text, seq = linehunter(ID, filename)
     if flip_flag:
         seq = reverse_complement(seq)
     this_segment = Segment(ID, flip_flag, seq)
+    print(f'\t|->{this_segment.name}_{this_segment.length}{"(r)" if flip_flag else ""}'.expandtabs(depth*10), file=sys.stderr)
     segments.append(this_segment)
     parts = text.split()
     if not parts[0].startswith('>'):
