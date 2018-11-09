@@ -30,9 +30,10 @@ def make_name(id):
 #%%
 
 class Segment:
-    def __init__(self, ID, flipped, seq):
+    def __init__(self, ID, flipped, header, seq):
         self.ID = ID
         self.flipped = flipped
+        self.header = header
         self.seq = seq
         self.length = len(seq)
         self.name = make_name(ID)
@@ -40,36 +41,52 @@ class Segment:
     def __str__(self):
         return f">{self.name}_{self.length}_{self.ID}\n{self.seq}"
 
-    
+    def __repr__(self):
+        return f"{self.name}_{self.length}_{self.ID}"
+
+def decode_fasta(m):
+    ''' Reads a pair of lines from the current position '''
+    header = m.readline().decode('utf-8').strip()
+    seq = m.readline().decode('utf-8').strip()
+    header_parts = header.split()
+    if not header_parts[0].startswith('>'):
+        raise ValueError("Malformed header line")
+    line_ID = int(header_parts[0][1:])
+    return line_ID, header, seq
+
 
 def findleft(pos, m):
+    ''' Returns the header+seq left of the current position '''
     m.seek(m.rfind(b'>', 0, pos))
-    return m.tell(), m.readline()
+    pos = m.tell()
+    foundline, header, seq = decode_fasta(m)
+    return pos, foundline, header, seq
 
+  
 
 def linehunter(target, filename): 
     ''' Finds a target ID (line number) in the FASTA file'''
+#    print("looking for",target)
     f = open(filename, 'r+')
     m = mmap(f.fileno(), 0)
-    foundline = -1
     jumps = 0
-    avglen = 0
+#    jumpto = len(m) ## find the last sequence
+    pos, foundline, header, seq = findleft(len(m), m) ## find the last sequence
     while foundline != target:
-        if foundline == -1:  # initialize by finding the position of the last line
-            jumpto = len(m)
-        else:
-            jumpto = int(target*avglen)
-        pos, text = findleft(jumpto, m)
-        parts = text.split()
-        if not parts[0].startswith(b'>'):
-            raise ValueError("Malformed header line")
-        foundline = int(parts[0][1:])
-        avglen = jumpto/foundline  # refine the average line length
+        if 1 <= (target - foundline) < 10:
+            #if we're close by, simply read some lines until we get there
+            foundline, header, seq = decode_fasta(m)
+#            print(jumps, "seeking", foundline)
+        else:    
+            #get an approximate position by assuming constant length of each line
+            avglen = pos/foundline  
+            pos, foundline, header, seq = findleft(int(target*avglen), m)
+#            print(jumps, "jumping", avglen, foundline)
         jumps += 1
-    # now that we've found the header line for this target, we can also get the sequence
-    seq = m.readline().decode('utf-8').strip()
+        if jumps>100:
+            raise IndexError("Failed to find line", target)
     m.close()
-    return pos, text.decode('utf-8'), seq
+    return pos, header, seq
 
 # %%
 
@@ -94,8 +111,8 @@ def buildtree(filename, segments, ID, maxdepth=3, flip_flag=False, depth=0):
     _, text, seq = linehunter(ID, filename)
     if flip_flag:
         seq = reverse_complement(seq)
-    this_segment = Segment(ID, flip_flag, seq)
-    print(f'\t|->{this_segment.name}_{this_segment.length}{"(r)" if flip_flag else ""}'.expandtabs(depth*10), file=sys.stderr)
+    this_segment = Segment(ID, flip_flag, text, seq)
+    print(f'\t|->{this_segment.name}_{this_segment.length}_{this_segment.ID}{"(r)" if flip_flag else ""}'.expandtabs(depth*10), file=sys.stderr)
     segments.append(this_segment)
     parts = text.split()
     if not parts[0].startswith('>'):
