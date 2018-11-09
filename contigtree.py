@@ -70,10 +70,9 @@ def linehunter(target, filename):
     f = open(filename, 'r+')
     m = mmap(f.fileno(), 0)
     jumps = 0
-#    jumpto = len(m) ## find the last sequence
     pos, foundline, header, seq = findleft(len(m), m) ## find the last sequence
     while foundline != target:
-        if 1 <= (target - foundline) < 10:
+        if 1 <= (target - foundline) < 100:
             #if we're close by, simply read some lines until we get there
             foundline, header, seq = decode_fasta(m)
 #            print(jumps, "seeking", foundline)
@@ -83,7 +82,7 @@ def linehunter(target, filename):
             pos, foundline, header, seq = findleft(int(target*avglen), m)
 #            print(jumps, "jumping", avglen, foundline)
         jumps += 1
-        if jumps>100:
+        if jumps>150:
             raise IndexError("Failed to find line", target)
     m.close()
     return pos, header, seq
